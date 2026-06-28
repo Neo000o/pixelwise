@@ -8,7 +8,7 @@ class ClassifyRequest(BaseModel):
 
 class ClassifyResponse(BaseModel):
     prediction: str
-confidence: float
+    confidence: float
     scores: dict[str, float]
 
 app = FastAPI()
