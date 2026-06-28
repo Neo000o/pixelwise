@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PixelWise</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #1a1a2e; color: white; }
+        canvas { border: 2px solid white; cursor: crosshair; background: black; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        #result { font-size: 48px; margin: 20px; }
+        #history { max-width: 400px; margin: auto; text-align: left; }
+    </style>
+</head>
+<body>
+    <h1>PixelWise</h1>
+    <canvas id="canvas" width="280" height="280"></canvas>
+    <br>
+    <button onclick="classify()">Classify</button>
+    <button onclick="clearCanvas()">Clear</button>
+    <div id="result">?</div>
+    <div id="history"></div>
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        let drawing = false;
+        canvas.addEventListener("mousedown", () => drawing = true);
+        canvas.addEventListener("mouseup", () => drawing = false);
+        canvas.addEventListener("mousemove", e => {
+            if (!drawing) return;
+            const r = canvas.getBoundingClientRect();
+            ctx.fillStyle = "white";
+            ctx.fillRect(e.clientX - r.left - 5, e.clientY - r.top - 5, 10, 10);
+        });
+        function clearCanvas() {
+            ctx.clearRect(0, 0, 280, 280);
+            document.getElementById("result").innerText = "?";
+        }
+        function getPixels() {
+            const small = document.createElement("canvas");
+            small.width = 28; small.height = 28;
+            small.getContext("2d").drawImage(canvas, 0, 0, 28, 28);
+            const data = small.getContext("2d").getImageData(0, 0, 28, 28).data;
+            const pixels = [];
+            for (let y = 0; y < 28; y++) {
+                const row = [];
+                for (let x = 0; x < 28; x++) {
+                    row.push(data[(y * 28 + x) * 4]);
+                }
+                pixels.push(row);
+            }
+            return pixels;
+        }
+        async function classify() {
+            const pixels = getPixels();
+            const res = await fetch("/api/classify", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({pixels})
+            });
+            const data = await res.json();
+            document.getElementById("result").innerText = data.prediction + " (" + (data.confidence * 100).toFixed(0) + "%)";
+            loadHistory();
+        }
+        async function loadHistory() {
+            const res = await fetch("/api/results");
+            const data = await res.json();
+            document.getElementById("history").innerHTML = data.results.map(r =>
+                `<p>${r.prediction} — ${(r.confidence*100).toFixed(0)}% — ${r.created_at}</p>`
+            ).join("");
+        }
+        loadHistory();
+    </script>
+</body>
+</html>
