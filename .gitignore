@@ -6,3 +6,4 @@ data/
 models/*.pkl
 .vscode/
 
+models/*.pkl
