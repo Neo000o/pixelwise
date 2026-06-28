@@ -1,0 +1,9 @@
+[Unit]
+Description=PixelWise auto-deploy
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=user
+WorkingDirectory=/home/user/pixelwise
+ExecStart=/home/user/pixelwise/deploy/auto-deploy.sh
