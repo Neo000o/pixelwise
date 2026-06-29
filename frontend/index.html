@@ -4,14 +4,35 @@
     <meta charset="UTF-8">
     <title>PixelWise</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #1a1a2e; color: white; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a2e; color: white; margin: 0; padding: 20px; }
         canvas { border: 2px solid white; cursor: crosshair; background: black; }
-        button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        button { margin: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; background: #e94560; color: white; border: none; border-radius: 5px; }
+        input { padding: 10px; margin: 5px; border-radius: 5px; border: none; width: 200px; }
         #result { font-size: 48px; margin: 20px; }
         #history { max-width: 400px; margin: auto; text-align: left; }
+        #auth-box { background: #16213e; padding: 20px; border-radius: 10px; max-width: 300px; margin: auto; }
+        #app { display: none; }
+        .error { color: #e94560; }
+        .success { color: #0f3460; background: #e94560; padding: 5px 10px; border-radius: 5px; }
+        #user-info { background: #16213e; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
     </style>
 </head>
 <body>
+
+<div id="auth-box">
+    <h2>PixelWise</h2>
+    <input type="email" id="email" placeholder="Email" /><br>
+    <input type="password" id="password" placeholder="Password" /><br>
+    <button onclick="login()">Login</button>
+    <button onclick="register()">Register</button>
+    <p id="auth-error" class="error"></p>
+</div>
+
+<div id="app">
+    <div id="user-info">
+        Logged in as <span id="user-email"></span> 
+        <button onclick="logout()" style="padding:5px 10px; font-size:12px;">Logout</button>
+    </div>
     <h1>PixelWise</h1>
     <canvas id="canvas" width="280" height="280"></canvas>
     <br>
@@ -19,56 +40,107 @@
     <button onclick="clearCanvas()">Clear</button>
     <div id="result">?</div>
     <div id="history"></div>
-    <script>
-        const canvas = document.getElementById("canvas");
-        const ctx = canvas.getContext("2d");
-        let drawing = false;
-        canvas.addEventListener("mousedown", () => drawing = true);
-        canvas.addEventListener("mouseup", () => drawing = false);
-        canvas.addEventListener("mousemove", e => {
-            if (!drawing) return;
-            const r = canvas.getBoundingClientRect();
-            ctx.fillStyle = "white";
-            ctx.fillRect(e.clientX - r.left - 5, e.clientY - r.top - 5, 10, 10);
+</div>
+
+<script>
+    let token = null;
+
+    async function register() {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email, password})
         });
-        function clearCanvas() {
-            ctx.clearRect(0, 0, 280, 280);
-            document.getElementById("result").innerText = "?";
+        const data = await res.json();
+        if (res.ok) {
+            document.getElementById("auth-error").innerText = "Registered! Now login.";
+        } else {
+            document.getElementById("auth-error").innerText = data.detail;
         }
-        function getPixels() {
-            const small = document.createElement("canvas");
-            small.width = 28; small.height = 28;
-            small.getContext("2d").drawImage(canvas, 0, 0, 28, 28);
-            const data = small.getContext("2d").getImageData(0, 0, 28, 28).data;
-            const pixels = [];
-            for (let y = 0; y < 28; y++) {
-                const row = [];
-                for (let x = 0; x < 28; x++) {
-                    row.push(data[(y * 28 + x) * 4]);
-                }
-                pixels.push(row);
-            }
-            return pixels;
-        }
-        async function classify() {
-            const pixels = getPixels();
-            const res = await fetch("/api/classify", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({pixels})
-            });
-            const data = await res.json();
-            document.getElementById("result").innerText = data.prediction + " (" + (data.confidence * 100).toFixed(0) + "%)";
+    }
+
+    async function login() {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({email, password})
+        });
+        const data = await res.json();
+        if (res.ok) {
+            token = data.access_token;
+            document.getElementById("auth-box").style.display = "none";
+            document.getElementById("app").style.display = "block";
+            document.getElementById("user-email").innerText = email;
             loadHistory();
+        } else {
+            document.getElementById("auth-error").innerText = data.detail;
         }
-        async function loadHistory() {
-            const res = await fetch("/api/results");
-            const data = await res.json();
-            document.getElementById("history").innerHTML = data.results.map(r =>
-                `<p>${r.prediction} — ${(r.confidence*100).toFixed(0)}% — ${r.created_at}</p>`
-            ).join("");
+    }
+
+    async function logout() {
+        await fetch("/api/auth/logout", {
+            method: "POST",
+            headers: {"Authorization": "Bearer " + token}
+        });
+        token = null;
+        document.getElementById("auth-box").style.display = "block";
+        document.getElementById("app").style.display = "none";
+    }
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    let drawing = false;
+    canvas.addEventListener("mousedown", () => drawing = true);
+    canvas.addEventListener("mouseup", () => drawing = false);
+    canvas.addEventListener("mousemove", e => {
+        if (!drawing) return;
+        const r = canvas.getBoundingClientRect();
+        ctx.fillStyle = "white";
+        ctx.fillRect(e.clientX - r.left - 5, e.clientY - r.top - 5, 10, 10);
+    });
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, 280, 280);
+        document.getElementById("result").innerText = "?";
+    }
+
+    function getPixels() {
+        const small = document.createElement("canvas");
+        small.width = 28; small.height = 28;
+        small.getContext("2d").drawImage(canvas, 0, 0, 28, 28);
+        const data = small.getContext("2d").getImageData(0, 0, 28, 28).data;
+        const pixels = [];
+        for (let y = 0; y < 28; y++) {
+            const row = [];
+            for (let x = 0; x < 28; x++) row.push(data[(y * 28 + x) * 4]);
+            pixels.push(row);
         }
+        return pixels;
+    }
+
+    async function classify() {
+        const res = await fetch("/api/classify", {
+            method: "POST",
+            headers: {"Content-Type": "application/json", "Authorization": "Bearer " + token},
+            body: JSON.stringify({pixels: getPixels()})
+        });
+        const data = await res.json();
+        if (res.status === 401) { logout(); return; }
+        document.getElementById("result").innerText = data.prediction + " (" + (data.confidence * 100).toFixed(0) + "%)";
         loadHistory();
-    </script>
+    }
+
+    async function loadHistory() {
+        const res = await fetch("/api/results", {headers: {"Authorization": "Bearer " + token}});
+        const data = await res.json();
+        document.getElementById("history").innerHTML = data.results.map(r =>
+            `<p>${r.prediction} — ${(r.confidence*100).toFixed(0)}% — ${r.created_at}</p>`
+        ).join("");
+    }
+</script>
 </body>
 </html>
